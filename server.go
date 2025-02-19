@@ -43,13 +43,18 @@ func main() {
 	var OAUTH_SECRET string = os.Getenv("GOOGLE_OAUTH_SECRET")
 	var OAUTH_REDIRECT_URL string = os.Getenv("GOOGLE_OAUTH_REDIRECT_URL")
 
+	// oauth config
 	conf := configOauth(OAUTH_KEY, OAUTH_SECRET, OAUTH_REDIRECT_URL)
 
+	// csrf protection token generation
 	randomStr := helper.RandomString(10)
 	verifier := oauth2.GenerateVerifier()
 
+	// router
 	http.HandleFunc("/oauth/google", GoogleOauthLogin(conf, randomStr, verifier))
 	http.HandleFunc(OAUTH_REDIRECT_URL, GoogleOauthCallback(conf, randomStr, verifier))
+
+	// start server
 	log.Fatal(http.ListenAndServe(":3000", nil))
 
 }
