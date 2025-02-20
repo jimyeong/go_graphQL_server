@@ -19,12 +19,12 @@ var queryType = graphql.NewObject(graphql.ObjectConfig{})
 var schema, _ = graphql.NewSchema(graphql.SchemaConfig{})
 
 // db connection
-func configOauth(OAUTH_KEY string, OAUTH_SECRET string, OAUTH_REDIRECT_URL string) *oauth2.Config {
+func configOauth(OAUTH_KEY string, OAUTH_SECRET string, OAUTH_REDIRECT_URL string, ORIGIN string) *oauth2.Config {
 	conf := &oauth2.Config{
 		ClientID:     OAUTH_KEY,
 		ClientSecret: OAUTH_SECRET,
 		Scopes:       []string{"email", "profile"},
-		RedirectURL:  OAUTH_REDIRECT_URL,
+		RedirectURL:  ORIGIN + OAUTH_REDIRECT_URL,
 		Endpoint: oauth2.Endpoint{
 			AuthURL:  "https://accounts.google.com/o/oauth2/v2/auth",
 			TokenURL: "https://oauth2.googleapis.com/token",
@@ -42,9 +42,14 @@ func main() {
 	var OAUTH_KEY string = os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
 	var OAUTH_SECRET string = os.Getenv("GOOGLE_OAUTH_SECRET")
 	var OAUTH_REDIRECT_URL string = os.Getenv("GOOGLE_OAUTH_REDIRECT_URL")
+	var ORIGIN string = os.Getenv("ORIGIN")
 
+<<<<<<< Updated upstream
 	// oauth config
 	conf := configOauth(OAUTH_KEY, OAUTH_SECRET, OAUTH_REDIRECT_URL)
+=======
+	conf := configOauth(OAUTH_KEY, OAUTH_SECRET, OAUTH_REDIRECT_URL, ORIGIN)
+>>>>>>> Stashed changes
 
 	// csrf protection token generation
 	randomStr := helper.RandomString(10)
@@ -80,6 +85,7 @@ func GoogleOauthCallback(conf *oauth2.Config, randomStr string, verifier string)
 		}
 		// Use token to get user information
 		client := conf.Client(context.Background(), token)
+		fmt.Println(token)
 		userInfo, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 		if err != nil {
 			http.Error(w, "Failed to get user info", http.StatusInternalServerError)
