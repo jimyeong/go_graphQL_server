@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"example.com/m/v2/helper"
+	"github.com/go-redis/redis/v8"
 	"github.com/graphql-go/graphql"
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
@@ -17,6 +18,37 @@ import (
 var queryType = graphql.NewObject(graphql.ObjectConfig{})
 
 var schema, _ = graphql.NewSchema(graphql.SchemaConfig{})
+
+func configRedis(context context.Context, DB_HOST string, DB_PASSWORD string) *redis.Client {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     DB_HOST,
+		Password: DB_PASSWORD, // no password set
+		DB:       0,           // use default DB
+	})
+
+	err := rdb.Set(context, "key", "value", 0).Err()
+	if err != nil {
+		panic(err)
+	}
+
+	val, err := rdb.Get(context, "key").Result()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("key", val)
+
+	val2, err := rdb.Get(context, "key2").Result()
+	if err == redis.Nil {
+		fmt.Println("key2 does not exist")
+	} else if err != nil {
+		panic(err)
+	} else {
+		fmt.Println("key2", val2)
+	}
+	// Output: key value
+	// key2 does not exist
+
+}
 
 // db connection
 func configOauth(OAUTH_KEY string, OAUTH_SECRET string, OAUTH_REDIRECT_URL string, ORIGIN string) *oauth2.Config {
@@ -43,13 +75,11 @@ func main() {
 	var OAUTH_SECRET string = os.Getenv("GOOGLE_OAUTH_SECRET")
 	var OAUTH_REDIRECT_URL string = os.Getenv("GOOGLE_OAUTH_REDIRECT_URL")
 	var ORIGIN string = os.Getenv("ORIGIN")
+	var REDIS_HOST string = os.Getenv("REDIS_HOST")
 
-<<<<<<< Updated upstream
-	// oauth config
-	conf := configOauth(OAUTH_KEY, OAUTH_SECRET, OAUTH_REDIRECT_URL)
-=======
+	configRedis(context.Background(), REDIS_HOST, "")
+
 	conf := configOauth(OAUTH_KEY, OAUTH_SECRET, OAUTH_REDIRECT_URL, ORIGIN)
->>>>>>> Stashed changes
 
 	// csrf protection token generation
 	randomStr := helper.RandomString(10)
