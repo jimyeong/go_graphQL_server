@@ -25,11 +25,11 @@ func InitRedisDb(context context.Context, DB_HOST string, DB_PASSWORD string) *A
 	})
 	return &AppRedis{Redis: redis}
 }
-func (r *AppRedis) SetAppToken(ctx context.Context, key string, token string) error {
-	return r.Redis.Set(ctx, key, token, time.Duration(TOKEN_MIN)*time.Minute).Err()
+func (r *AppRedis) SetSessionToken(ctx context.Context, key string, oauthToken *oauth2.Token) error {
+	return r.Redis.Set(ctx, key, oauthToken, time.Duration(TOKEN_MIN)*time.Minute).Err()
 }
 
-func (r *AppRedis) GetAppToken(ctx context.Context, key string) (string, error) {
+func (r *AppRedis) GetSessionToken(ctx context.Context, key string) (string, error) {
 	return r.Redis.Get(ctx, key).Result()
 }
 

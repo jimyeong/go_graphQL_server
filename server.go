@@ -112,23 +112,56 @@ func main() {
 	var REDIS_HOST string = os.Getenv("REDIS_HOST")
 	// var REDIS_DB_NAME string = os.Getenv("REDIS_DB_NAME")
 	var REDIS_PASSWORD string = os.Getenv("REDIS_PASSWORD")
+
 	var SECRET string = os.Getenv("SECRET")
+	store := sessions.NewCookieStore([]byte(SECRET))
 	conf := configOauth(OAUTH_KEY, OAUTH_SECRET, OAUTH_REDIRECT_URL, ORIGIN)
 	mysqlClient, err := configSQLDB(context.Background(), MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer mysqlClient.Close()
-	server := gin.Default()
+	server := gin.New()
 
 	_redisDb := dbs.InitRedisDb(context.Background(), REDIS_HOST, REDIS_PASSWORD)
 
 	// csrf protection token generation
 	randomStr := helper.RandomString(10)
 	verifier := oauth2.GenerateVerifier()
+	server.Use(gin.Logger())
+	server.Use(gin.Recovery())
 
-	store := sessions.NewCookieStore([]byte(SECRET))
-	server.Use(middleware.AuthenticationMiddleware(store, SECRET, _redisDb))
+	authorized := server.Group("/v1/apis")
+
+	authorized.Use(middleware.AuthenticationMiddleware(store, SECRET, _redisDb))
+	{
+		authorized.GET("/todos", func(context *gin.Context) {
+			// set header
+			header := context.Request.Header
+			token, ok := context.Get("jwt_token")
+			if !ok {
+				context.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+				context.Redirect(http.StatusTemporaryRedirect, "/oauth/google")
+				return
+			}
+			header.Set("Authorization", "Bearer: "+token.(string))
+			context.JSON(http.StatusOK, gin.H{"message": "Hello, World!"})
+		})
+		authorized.GET("/youtube", func(context *gin.Context) {
+			// set header
+			header := context.Request.Header
+			token, ok := context.Get("jwt_token")
+			if !ok {
+				context.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+				context.Redirect(http.StatusTemporaryRedirect, "/oauth/google")
+				return
+			}
+			header.Set("Authorization", "Bearer: "+token.(string))
+			context.JSON(http.StatusOK, gin.H{"send requests to todo API": "Requesting"})
+		})
+	}
+
+	// server.Use(middleware.AuthenticationMiddleware(store, SECRET, _redisDb))
 
 	// middleware
 	// server.Use(tokenCheckMiddleware())
@@ -218,8 +251,11 @@ func GoogleOauthCallback(conf *oauth2.Config, randomStr string, verifier string,
 			context.JSON(http.StatusInternalServerError, gin.H{"error": error})
 			return
 		}
-
+		sessionID := helper.RandomString(10)
+		redisDb.SetSessionToken(context, sessionID, token)
+		context.SetCookie("session_id", sessionID, constants.TIME_MINUTES_TOKEN_EXPIRATION, "http://localhost:3000", "http://localhost:3000", false, true)
 		context.JSON(http.StatusOK, gin.H{"result": user.Email, "minutes": constants.TIME_MINUTES_TOKEN_EXPIRATION})
+
 		fmt.Println(result)
 		// fmt.Fprintf(w, "Hello, %s! Your email is %s. your name is %s, your phoneNumber is %s, your dateOfBirth is %s, your displayName is %s, your localId is %s, your verified is %t", user.Name, user.Email, user.PhoneNumber, user.DateOfBirth, user.DisplayName, user.LocalId, user.Verified)
 	}
