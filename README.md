@@ -4,7 +4,6 @@ $ go get golang.org/x/oauth2
 
 $ go get golang.org/x/oauth2/google
 
-<<<<<<< HEAD
 
 ![system_plan.png](./system_plan.png)
 
@@ -22,7 +21,3 @@ Reasons for the design:
 4. So I came to the conclusion, using sessions with users, but internally using JWT tokens for other service APIs.
 5. to make the system fast, I decided to use Redis for fetching JWT tokens.
 
-=======
-## System plan
-![system_plan.png](./system_plan.png)
->>>>>>> master
