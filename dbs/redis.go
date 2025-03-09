@@ -25,12 +25,29 @@ func InitRedisDb(context context.Context, DB_HOST string, DB_PASSWORD string) *A
 	})
 	return &AppRedis{Redis: redis}
 }
-func (r *AppRedis) SetSessionToken(ctx context.Context, key string, oauthToken *oauth2.Token) error {
-	return r.Redis.Set(ctx, key, oauthToken, time.Duration(TOKEN_MIN)*time.Minute).Err()
+func (r *AppRedis) SetSessionToken(ctx context.Context, key string, token *oauth2.Token) error {
+
+	jsonToken, err := json.Marshal(token)
+	if err != nil {
+		message := "failed to encode token"
+		return errors.New(message)
+	}
+	return r.Redis.Set(ctx, key, jsonToken, time.Duration(TOKEN_MIN)*time.Minute).Err()
 }
 
-func (r *AppRedis) GetSessionToken(ctx context.Context, key string) (string, error) {
-	return r.Redis.Get(ctx, key).Result()
+func (r *AppRedis) GetSessionToken(ctx context.Context, key string) (*oauth2.Token, error) {
+	jsonToken, err := r.Redis.Get(ctx, key).Result()
+	if err != nil {
+		message := "failed to get token"
+		return nil, errors.New(message)
+	}
+	var token oauth2.Token
+	err = json.Unmarshal([]byte(jsonToken), &token)
+	if err != nil {
+		message := "failed to decode token"
+		return nil, errors.New(message)
+	}
+	return &token, nil
 }
 
 func (r *AppRedis) SetOauthToken(ctx context.Context, key string, token *oauth2.Token) error {

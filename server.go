@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/gorilla/sessions"
 	"github.com/graphql-go/graphql"
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
@@ -110,11 +109,9 @@ func main() {
 	var MYSQL_PASSWORD string = os.Getenv("MYSQL_PASSWORD")
 	var MYSQL_DB string = os.Getenv("MYSQL_DB")
 	var REDIS_HOST string = os.Getenv("REDIS_HOST")
-	// var REDIS_DB_NAME string = os.Getenv("REDIS_DB_NAME")
 	var REDIS_PASSWORD string = os.Getenv("REDIS_PASSWORD")
+	//var SECRET string = os.Getenv("SECRET")
 
-	var SECRET string = os.Getenv("SECRET")
-	store := sessions.NewCookieStore([]byte(SECRET))
 	conf := configOauth(OAUTH_KEY, OAUTH_SECRET, OAUTH_REDIRECT_URL, ORIGIN)
 	mysqlClient, err := configSQLDB(context.Background(), MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB)
 	if err != nil {
@@ -131,41 +128,33 @@ func main() {
 	server.Use(gin.Logger())
 	server.Use(gin.Recovery())
 
-	authorized := server.Group("/v1/apis")
+	// authorized := server.Group("/v1/apis")
 
-	authorized.Use(middleware.AuthenticationMiddleware(store, SECRET, _redisDb))
-	{
-		authorized.GET("/todos", func(context *gin.Context) {
-			// set header
-			header := context.Request.Header
-			token, ok := context.Get("jwt_token")
-			if !ok {
-				context.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-				context.Redirect(http.StatusTemporaryRedirect, "/oauth/google")
-				return
-			}
-			header.Set("Authorization", "Bearer: "+token.(string))
-			context.JSON(http.StatusOK, gin.H{"message": "Hello, World!"})
-		})
-		authorized.GET("/youtube", func(context *gin.Context) {
-			// set header
-			header := context.Request.Header
-			token, ok := context.Get("jwt_token")
-			if !ok {
-				context.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-				context.Redirect(http.StatusTemporaryRedirect, "/oauth/google")
-				return
-			}
-			header.Set("Authorization", "Bearer: "+token.(string))
-			context.JSON(http.StatusOK, gin.H{"send requests to todo API": "Requesting"})
-		})
-	}
+	// authorized.Use(middleware.AuthenticationMiddleware(_redisDb))
+	// {
+	// 	authorized.GET("/todos", func(context *gin.Context) {
+	// 		// set header
+	// 		header := context.Request.Header
+	// 		token, ok := context.Get("jwt_token")
+	// 		if !ok {
+	// 			context.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+	// 			context.Redirect(http.StatusTemporaryRedirect, "/oauth/google")
+	// 			return
+	// 		}
+	// 		header.Set("Authorization", "Bearer: "+token.(string))
+	// 		context.JSON(http.StatusOK, gin.H{"message": "Hello, World!"})
+	// 	})
+	// }
 
 	// server.Use(middleware.AuthenticationMiddleware(store, SECRET, _redisDb))
 
 	// middleware
 	// server.Use(tokenCheckMiddleware())
 	// router
+	server.GET("v1/apis/todos", middleware.AuthenticationMiddleware(_redisDb), func(context *gin.Context) {
+		// context.JSON(http.StatusOK, gin.H{"message": "Hello, World!"})
+		context.JSON(http.StatusOK, gin.H{"message": "Todo Api"})
+	})
 	server.GET("/oauth/google", GoogleOauthLogin(conf, randomStr, verifier))
 	server.GET(OAUTH_REDIRECT_URL, GoogleOauthCallback(conf, randomStr, verifier, mysqlClient, _redisDb, constants.TIME_MINUTES_COOKIE_EXPIRATION))
 	// start server
@@ -246,14 +235,15 @@ func GoogleOauthCallback(conf *oauth2.Config, randomStr string, verifier string,
 
 			// return
 		}
-		error := redisDb.SetOauthToken(context, user.Email, token)
+		sessionID := helper.RandomString(15)
+		context.SetCookie("session_id", sessionID, constants.TIME_MINUTES_COOKIE_EXPIRATION, "/", "/", true, true)
+		error := redisDb.SetSessionToken(context, sessionID, token)
+		// error := redisDb.SetOauthToken(context, user.Email, token)
 		if error != nil {
 			context.JSON(http.StatusInternalServerError, gin.H{"error": error})
 			return
 		}
-		sessionID := helper.RandomString(10)
-		redisDb.SetSessionToken(context, sessionID, token)
-		context.SetCookie("session_id", sessionID, constants.TIME_MINUTES_TOKEN_EXPIRATION, "http://localhost:3000", "http://localhost:3000", false, true)
+		// context.SetCookie("session_id", sessionID, constants.TIME_MINUTES_TOKEN_EXPIRATION, "http://localhost:3000", "http://localhost:3000", false, true)
 		context.JSON(http.StatusOK, gin.H{"result": user.Email, "minutes": constants.TIME_MINUTES_TOKEN_EXPIRATION})
 
 		fmt.Println(result)
