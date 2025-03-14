@@ -21,3 +21,13 @@ Reasons for the design:
 4. So I came to the conclusion, using sessions with users, but internally using JWT tokens for other service APIs.
 5. to make the system fast, I decided to use Redis for fetching JWT tokens.
 
+## About cookies and cors
+
+1. path option
+2. domain option
+3. secure option
+4. httpOnly option
+5. sameSite option
+
+
+

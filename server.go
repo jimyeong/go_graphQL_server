@@ -15,10 +15,13 @@ import (
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
 
+	"time"
+
 	"example.com/m/v2/constants"
 	"example.com/m/v2/dbs"
 	"example.com/m/v2/helper"
 	"example.com/m/v2/middleware"
+	"github.com/gin-contrib/cors"
 )
 
 type cookieData struct {
@@ -124,38 +127,30 @@ func main() {
 
 	// csrf protection token generation
 	randomStr := helper.RandomString(10)
+	// oauth2 verifier
 	verifier := oauth2.GenerateVerifier()
+	// logger setup
 	server.Use(gin.Logger())
 	server.Use(gin.Recovery())
+	// cors setup
+	server.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000"},
+		AllowMethods:     []string{"PUT", "PATCH"},
+		AllowHeaders:     []string{"Origin"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
-	// authorized := server.Group("/v1/apis")
-
-	// authorized.Use(middleware.AuthenticationMiddleware(_redisDb))
-	// {
-	// 	authorized.GET("/todos", func(context *gin.Context) {
-	// 		// set header
-	// 		header := context.Request.Header
-	// 		token, ok := context.Get("jwt_token")
-	// 		if !ok {
-	// 			context.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-	// 			context.Redirect(http.StatusTemporaryRedirect, "/oauth/google")
-	// 			return
-	// 		}
-	// 		header.Set("Authorization", "Bearer: "+token.(string))
-	// 		context.JSON(http.StatusOK, gin.H{"message": "Hello, World!"})
-	// 	})
-	// }
-
-	// server.Use(middleware.AuthenticationMiddleware(store, SECRET, _redisDb))
-
-	// middleware
-	// server.Use(tokenCheckMiddleware())
-	// router
+	// todo api request
 	server.GET("v1/apis/todos", middleware.AuthenticationMiddleware(_redisDb), func(context *gin.Context) {
-		// context.JSON(http.StatusOK, gin.H{"message": "Hello, World!"})
+
 		context.JSON(http.StatusOK, gin.H{"message": "Todo Api"})
 	})
+
+	// oauth2 login
 	server.GET("/oauth/google", GoogleOauthLogin(conf, randomStr, verifier))
+	// oauth2 callback
 	server.GET(OAUTH_REDIRECT_URL, GoogleOauthCallback(conf, randomStr, verifier, mysqlClient, _redisDb, constants.TIME_MINUTES_COOKIE_EXPIRATION))
 	// start server
 	log.Fatal(server.Run(":3000"))
@@ -164,7 +159,6 @@ func GoogleOauthLogin(conf *oauth2.Config, randomStr string, verifier string) fu
 	url := conf.AuthCodeURL(randomStr, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
 	return func(context *gin.Context) {
 		context.Redirect(http.StatusTemporaryRedirect, url)
-		//  context.JSON(http.StatusOK, gin.H{"url": url})
 	}
 }
 
@@ -198,6 +192,8 @@ func GoogleOauthCallback(conf *oauth2.Config, randomStr string, verifier string,
 			context.JSON(http.StatusBadRequest, gin.H{"error": "Email is required"})
 			return
 		}
+		// TODO
+		// later query the user from DB first to check if the user exists
 
 		query := `
 			INSERT INTO users (
@@ -211,40 +207,27 @@ func GoogleOauthCallback(conf *oauth2.Config, randomStr string, verifier string,
 		result, err := sqlClient.Exec(query, user.Email, "google", user.Email, user.DisplayName, user.Picture)
 
 		fmt.Println(err)
-		// error cases
-		// 1. Duplicated entry => No need to save in DB, but need to save in Redis as we are using 3rd party auth
-		// logging the error
+		/**
+		error cases
+		1. Duplicated entry => No need to save in DB, but need to save in Redis as we are using 3rd party auth
+		2. Other errors => need to save in DB and Redis
+		**/
 
-		// 2. Other errors
-		// fullName := strings.Split(user.Name, " ")
-
-		// userData := cookieData{
-		// 	Email: user.Email,
-
-		// 	SurName:     fullName[1],
-		// 	FirstName:   fullName[0],
-		// 	Picture:     user.Picture,
-		// 	DisplayName: user.DisplayName,
-		// 	DateOfBirth: user.DateOfBirth,
-		// 	Verified:    user.Verified,
-		// }
-		if err != nil {
-			// var message string
-			// message = "Duplicated entry"
-			// context.JSON(http.StatusConflict, gin.H{"error": message})
-
-			// return
-		}
+		// session id generation ( access token key )
 		sessionID := helper.RandomString(15)
-		context.SetCookie("session_id", sessionID, constants.TIME_MINUTES_COOKIE_EXPIRATION, "/", "/", true, true)
+
+		// cookie same site setting
+		context.SetSameSite(http.SameSiteDefaultMode)
+		// because of the path option it had not been working, and also the expiration time was wrong
+		context.SetCookie("session_id", sessionID, constants.TIME_MINUTES_COOKIE_EXPIRATION, "/", "http://localhost:3000", true, true)
 		error := redisDb.SetSessionToken(context, sessionID, token)
-		// error := redisDb.SetOauthToken(context, user.Email, token)
 		if error != nil {
 			context.JSON(http.StatusInternalServerError, gin.H{"error": error})
+			context.SetCookie("session_id", "", 1, "/", "http://localhost:3000", true, true) // delete the cookie
 			return
 		}
 		// context.SetCookie("session_id", sessionID, constants.TIME_MINUTES_TOKEN_EXPIRATION, "http://localhost:3000", "http://localhost:3000", false, true)
-		context.JSON(http.StatusOK, gin.H{"result": user.Email, "minutes": constants.TIME_MINUTES_TOKEN_EXPIRATION})
+		context.JSON(http.StatusOK, gin.H{"result": user.Email, "minutes /s": constants.TIME_MINUTES_COOKIE_EXPIRATION})
 
 		fmt.Println(result)
 		// fmt.Fprintf(w, "Hello, %s! Your email is %s. your name is %s, your phoneNumber is %s, your dateOfBirth is %s, your displayName is %s, your localId is %s, your verified is %t", user.Name, user.Email, user.PhoneNumber, user.DateOfBirth, user.DisplayName, user.LocalId, user.Verified)
